@@ -2,7 +2,7 @@
 
 Wouter
 
-Namen : Username / Namen : Username
-Quinten Nouws : AngryFreak /
+Namen : Username
+Quinten Nouws : AngryFreak
 TukTuk Dhungana : MrBeast 
 Valentina Abujanova : Shinobi815
