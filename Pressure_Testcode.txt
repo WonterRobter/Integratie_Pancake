@@ -1,0 +1,22 @@
+"""
+https://medium.com/shyam-cortex/flexiforce-pressure-sensor-30c1ab58bd0a
+"""
+
+#include <Arduino.h>
+
+void setup() {
+  Serial.begin(9600);      // seriële monitor starten
+}
+
+void loop() {
+  int rawValue = analogRead(A0);    // ruwe ADC-waarde 0–1023
+  float voltage = rawValue * (5.0 / 1023); // omzetting naar spanning (0–5V)
+
+  Serial.print("Raw ADC: ");
+  Serial.print(rawValue);
+  Serial.print(" | Voltage: ");
+  Serial.print(voltage, 3);
+  Serial.println(" V");
+
+  delay(500);
+}
