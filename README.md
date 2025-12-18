@@ -5,7 +5,7 @@
 ---
 
 ## 📝 Projectbeschrijving
--
+Een slim kookplaat voor gemakkelijk (vb. Karamel makkelijker maken) en veilig gebruik voor jongeren dat simpel en duidelijk is om te gebruiken.
 
 ## 🎯 Doel van het project
 Het doel van deze Proof of Concept (PoC) is om een opstelling te bouwen die:
