@@ -24,7 +24,7 @@ Hieronder staan de teamleden die aan dit project werken:
 | **Valentina Abujanova** | [@Shinobi815](https://github.com/Shinobi815) | 1 | --- |
 | **Celil Bayram** | [@account](https://github.com/account2) | 1 | --- |
 | **Tuk Dhungana** | [@A-bit-a](https://github.com/A-bit-a) | 1 | --- |
-| **Quinten Nouws** | [@AngryFreak](https://github.com/AngryFreak) | 3 | --- |
+| **Quinten Nouws** | [@AngryFreak](https://github.com/AngryFreak) | 1 | --- |
 | **Wouter De Laet** | [@WonterRobter](https://github.com/WonterRobter) | 3 | --- |
 | **Tristan De Ben** | [@Tristandb02](https://github.com/Tristandb02) | 3 | --- |
 
