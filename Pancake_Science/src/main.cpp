@@ -1,3 +1,7 @@
+/*
+Dit is testcode van de Adafruit_MLX90632 library zelf om de heating pad aan te sturen met een relais en start/stop knop
+*/
+
 #include <Arduino.h>
 #include "Adafruit_MLX90632.h"
 
