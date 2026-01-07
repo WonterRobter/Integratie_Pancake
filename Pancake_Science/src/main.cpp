@@ -1,91 +1,191 @@
-/*
-Dit is testcode van de Adafruit_MLX90632 library zelf om de heating pad aan te sturen met een relais en start/stop knop
-*/
-
 #include <Arduino.h>
+#include <Wire.h>
 #include "Adafruit_MLX90632.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include "secrets.h"
 
-Adafruit_MLX90632 mlx = Adafruit_MLX90632();
+// ================== HARDWARE ==================
+Adafruit_MLX90632 mlx;
 
-// ---------- Hardware ----------
-const int relayPin = 7;  // Relay aansturen warmtemat
-const int buttonPin = 6; // Start/Stop knop
+const int relayPin = 7;
+const int buttonPin = 6;
 
-bool sessionActive = false; // sessie status
+const int encCLK = 2;
+const int encDT = 3;
+const int encSW = 4;
 
+const int ledR = 9; // RGB common anode
+const int ledG = 10;
+const int ledB = 11;
+
+
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// ================== VARS ==================
+bool sessionActive = false;
+bool heatingOn = false;
+float setpoint = 60.0;
+float hysteresis = 2.0;
+
+int lastCLKState;
+
+// ================== RGB FUNCTION ================== na checken (Common anode)
+void setRGB(int r, int g, int b)
+{
+  analogWrite(ledR, 255 - r);
+  analogWrite(ledG, 255 - g);
+  analogWrite(ledB, 255 - b);
+}
+
+// ================== MQTT CALLBACK ==================
+void callback(char *topic, byte *payload, unsigned int length)
+{
+  String msg;
+  for (int i = 0; i < length; i++)
+    msg += (char)payload[i];
+
+  if (String(topic) == "pancake/command/start")
+  {
+    sessionActive = (msg == "1");
+    digitalWrite(relayPin, sessionActive ? HIGH : LOW);
+  }
+}
+
+// ================== CONNECT WIFI ==================
+void setup_wifi()
+{
+  delay(100);
+  WiFi.begin(SSID, PASSWORD);
+  Serial.print("Connecting WiFi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Connected to WiFi");
+}
+
+// ================== CONNECT MQTT ==================
+void reconnect()
+{
+  while (!client.connected())
+  {
+    Serial.print("Connecting MQTT...");
+    if (client.connect("pancakeController"))
+    {
+      Serial.println("connected");
+      client.subscribe("pancake/command/#");
+    }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      delay(2000);
+    }
+  }
+}
+
+// ================== SETUP ==================
 void setup()
 {
   Serial.begin(115200);
-  while (!Serial)
-    delay(10);
+  Wire.begin();
 
-  // Sensor initialisatie
-  Serial.println(F("Adafruit MLX90632 test"));
+  // Sensor
   if (!mlx.begin())
   {
-    Serial.println(F("Failed to find MLX90632 chip"));
     while (1)
+    {
       delay(10);
+    }
   }
-  Serial.println(F("MLX90632 Found!"));
-
   mlx.reset();
   mlx.setMode(MLX90632_MODE_CONTINUOUS);
   mlx.setMeasurementSelect(MLX90632_MEAS_MEDICAL);
   mlx.setRefreshRate(MLX90632_REFRESH_2HZ);
   mlx.resetNewData();
 
-  // ---------- Pins ----------
+  // Pins
   pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, LOW); // Relay uit bij start
+  digitalWrite(relayPin, LOW);
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(encCLK, INPUT);
+  pinMode(encDT, INPUT);
+  pinMode(encSW, INPUT_PULLUP);
+  pinMode(ledR, OUTPUT);
+  pinMode(ledG, OUTPUT);
+  pinMode(ledB, OUTPUT);
+  setRGB(255, 255, 0); // blauw idle
 
-  pinMode(buttonPin, INPUT_PULLUP); // knop met interne pullup
+  lastCLKState = digitalRead(encCLK);
+
+  // WiFi + MQTT
+  setup_wifi();
+  client.setServer(MQTT_SERVER, 1883);
+  client.setCallback(callback);
+
+  Serial.println("Setup klaar");
 }
 
+// ================== LOOP ==================
 void loop()
 {
-  // ---------- Knop detectie ----------
-  static bool lastButtonState = HIGH;
-  bool buttonState = digitalRead(buttonPin);
+  if (!client.connected())
+    reconnect();
+  client.loop();
 
-  if (buttonState == LOW && lastButtonState == HIGH)
-  {            // togglet bij druk
-    delay(50); // debounce
+  // --- Start/Stop knop ---
+  static bool lastButton = HIGH;
+  bool btn = digitalRead(buttonPin);
+  if (btn == LOW && lastButton == HIGH)
+  {
+    delay(50);
     sessionActive = !sessionActive;
-    if (sessionActive)
-    {
-      Serial.println("=== Session gestart ===");
-      digitalWrite(relayPin, HIGH); // warmtemat aan
-    }
-    else
-    {
-      Serial.println("=== Session gestopt ===");
-      digitalWrite(relayPin, LOW); // warmtemat uit
-    }
+    digitalWrite(relayPin, sessionActive ? HIGH : LOW);
+    Serial.println(sessionActive ? "Session gestart" : "Session gestopt");
   }
-  lastButtonState = buttonState;
+  lastButton = btn;
 
-  // ---------- Temperatuur uitlezen ----------
-  if (mlx.isNewData() && sessionActive)
-  { // alleen meten tijdens sessie
-    double ambientTemp = mlx.getAmbientTemperature();
-    double objectTemp = mlx.getObjectTemperature();
+  // --- Rotary encoder ---
+  int clkState = digitalRead(encCLK);
+  if (clkState != lastCLKState)
+  {
+    if (digitalRead(encDT) != clkState)
+      setpoint += 0.5;
+    else
+      setpoint -= 0.5;
+    setpoint = constrain(setpoint, 30, 120);
+    Serial.print("Nieuw setpoint: ");
+    Serial.println(setpoint);
+    lastCLKState = clkState;
+  }
 
-    Serial.print("Ambient Temp: ");
-    Serial.print(ambientTemp, 2);
-    Serial.print(" °C, Object Temp: ");
-    Serial.print(objectTemp, 2);
-    Serial.println(" °C");
+  // --- Meting & bang-bang regeling ---
+  if (sessionActive && mlx.isNewData())
+  {
+    float objTemp = mlx.getObjectTemperature();
+    float ambTemp = mlx.getAmbientTemperature();
+
+    heatingOn = (objTemp < setpoint - hysteresis) ? true : (objTemp > setpoint + hysteresis ? false : heatingOn);
+    digitalWrite(relayPin, heatingOn ? HIGH : LOW);
+
+    // RGB
+    if (!sessionActive)
+      setRGB(0, 0, 255);
+    else if (heatingOn)
+      setRGB(255, 140, 0);
+    else
+      setRGB(0, 255, 0);
+
+    // MQTT / WebApp
+    String payload = String(objTemp, 2) + "," + String(ambTemp, 2) + "," + String(setpoint, 1) + "," + String(heatingOn ? 1 : 0);
+    client.publish("pancake/telemetry", payload.c_str());
 
     mlx.resetNewData();
   }
 
-  // Voor step modes, trigger measurement
-  mlx90632_mode_t currentMode = mlx.getMode();
-  if (currentMode == MLX90632_MODE_STEP || currentMode == MLX90632_MODE_SLEEPING_STEP)
-  {
-    mlx.startSingleMeasurement();
-  }
-
-  delay(500);
+  delay(200);
 }
