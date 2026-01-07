@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>PancakeScience Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <header>
+        <h1>PancakeScience</h1>
+        <div class="user-info">
+            Ingelogd als: <strong>{{ role }}</strong>
+            <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
+        </div>
+    </header>
+
+    <main>
+        <h2>Dashboard</h2>
+        <p>Beheer je pannenkoeken-programma's, gebruikers en bekijk de live temperatuur van de bakplaat.</p>
+
+        <div class="cards">
+            <div class="card">
+                <h3>Programma's <span class="tag">verwarming</span></h3>
+                <p>Bekijk en beheer de verwarmingsprogramma's (target temperatuur, flip tijd en totale tijd).</p>
+                <a href="{{ url_for('dashboard') }}">Naar programma's</a>
+            </div>
+
+            <div class="card">
+                <h3>Live grafiek <span class="tag">sensor</span></h3>
+                <p>Bekijk de laatste temperatuurmetingen van de pannenkoekenbakplaat.</p>
+                <a class="secondary" href="{{ url_for('graph_page') }}">Bekijk grafiek</a>
+            </div>
+
+            {% if role == 'parent' or role == 'admin' %}
+            <div class="card">
+                <h3>Gebruikers <span class="tag">familie / systeem</span></h3>
+                <p>Beheer gebruikers. Admin ziet alle accounts, parent alleen de eigen familie.</p>
+                <a href="{{ url_for('users') }}">Naar gebruikers</a>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <footer>
+        PancakeScience – Arduino UNO R4 WiFi • Raspberry Pi • Flask • MySQL
+    </footer>
+</body>
+
+</html>

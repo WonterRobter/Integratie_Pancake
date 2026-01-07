@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Programma's - PancakeScience</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <header>
+        <h1>PancakeScience</h1>
+        <div class="user-info">
+            Ingelogd als: <strong>{{ role }}</strong>
+            <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
+        </div>
+    </header>
+
+    <main>
+        <h2>Programma's</h2>
+        <p><a href="{{ url_for('index') }}">← Terug naar dashboard</a></p>
+
+        <div class="table-wrapper">
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Naam</th>
+                    <th>Omschrijving</th>
+                    <th>Target temp (°C)</th>
+                    <th>Totale tijd (s)</th>
+                    <th>Flip tijd (s)</th>
+                    <th>Aangemaakt door</th>
+                    <th>Acties</th>
+                </tr>
+                {% for p in programs %}
+                <tr>
+                    <td>{{ p.program_id }}</td>
+                    <td>{{ p.name }}</td>
+                    <td>{{ p.description }}</td>
+                    <td>{{ p.target_temp }}</td>
+                    <td>{{ p.total_time }}</td>
+                    <td>{{ p.flip_time }}</td>
+                    <td>{{ p.username }}</td>
+                    <td>
+                        {% if role == 'parent' or role == 'admin' %}
+                        <a href="{{ url_for('edit_program', program_id=p.program_id) }}">Bewerken</a> |
+                        <a href="{{ url_for('delete_program', program_id=p.program_id) }}"
+                            onclick="return confirm('Weet je zeker dat je dit programma wilt verwijderen?');">
+                            Verwijderen
+                        </a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        {% if role == 'parent' or role == 'admin' %}
+        <h3 class="mt-3">Nieuw programma toevoegen</h3>
+        <form method="POST" action="{{ url_for('add_program') }}">
+            <div>
+                <input type="text" name="name" placeholder="Naam" required>
+            </div>
+            <div>
+                <input type="text" name="description" placeholder="Omschrijving">
+            </div>
+            <div>
+                <input type="number" name="target_temp" placeholder="Target temperatuur (°C)" required>
+            </div>
+            <div>
+                <input type="number" name="total_time" placeholder="Totale tijd (s)">
+            </div>
+            <div>
+                <input type="number" name="flip_time" placeholder="Flip tijd (s)">
+            </div>
+            <button type="submit">Toevoegen</button>
+        </form>
+        {% endif %}
+    </main>
+
+    <footer>
+        PancakeScience – Programma beheer
+    </footer>
+</body>
+
+</html>

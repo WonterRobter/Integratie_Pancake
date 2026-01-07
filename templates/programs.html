@@ -1,0 +1,26 @@
+<link rel="stylesheet" href="/static/style.css">
+
+<div class="container">
+    <h2>Kookprogramma's</h2>
+
+    {% if role == "admin" %}
+    <form method="post">
+        <input name="name" placeholder="Gerecht">
+        <input name="temp" placeholder="Temperatuur °C">
+        <input name="flip" placeholder="Flip na (sec)">
+        <input name="time" placeholder="Totale tijd (sec)">
+        <button>Toevoegen</button>
+    </form>
+    {% endif %}
+
+    {% for p in programs %}
+    <div class="card">
+        <b>{{ p.name }}</b> – {{ p.temp }}°C – flip {{ p.flip }}s
+        {% if role == "admin" %}
+        <a class="delete" href="/delete_program/{{ loop.index0 }}">✖</a>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <a href="/dashboard">Terug</a>
+</div>

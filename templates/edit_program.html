@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Programma bewerken - PancakeScience</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <header>
+        <h1>PancakeScience</h1>
+        <div class="user-info">
+            Ingelogd als: <strong>{{ role }}</strong>
+            <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
+        </div>
+    </header>
+
+    <main>
+        <h2>Programma bewerken</h2>
+        <p><a href="{{ url_for('dashboard') }}">← Terug naar programma's</a></p>
+
+        <form method="POST">
+            <div>
+                <input type="text" name="name" placeholder="Naam" value="{{ program.name }}" required>
+            </div>
+            <div>
+                <input type="text" name="description" placeholder="Omschrijving" value="{{ program.description }}">
+            </div>
+            <div>
+                <input type="number" name="target_temp" placeholder="Target temperatuur (°C)"
+                    value="{{ program.target_temp }}" required>
+            </div>
+            <div>
+                <input type="number" name="total_time" placeholder="Totale tijd (s)" value="{{ program.total_time }}">
+            </div>
+            <div>
+                <input type="number" name="flip_time" placeholder="Flip tijd (s)" value="{{ program.flip_time }}">
+            </div>
+            <button type="submit">Opslaan</button>
+        </form>
+    </main>
+
+    <footer>
+        PancakeScience – Programma bewerken
+    </footer>
+</body>
+
+</html>

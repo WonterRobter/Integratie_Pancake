@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Gebruikers - PancakeScience</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <header>
+        <h1>PancakeScience</h1>
+        <div class="user-info">
+            Ingelogd als: <strong>{{ role }}</strong>
+            <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
+        </div>
+    </header>
+
+    <main>
+        <h2>Gebruikers beheren</h2>
+        <p><a href="{{ url_for('index') }}">← Terug naar dashboard</a></p>
+
+        <div class="table-wrapper">
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Rol</th>
+                    <th>Family ID</th>
+                    <th>Acties</th>
+                </tr>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.user_id }}</td>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.role }}</td>
+                    <td>{{ u.Family_id }}</td>
+                    <td>
+                        <a href="{{ url_for('delete_user', user_id=u.user_id) }}"
+                            onclick="return confirm('Weet je zeker dat je deze gebruiker wilt verwijderen?');">
+                            Verwijderen
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <h3 class="mt-3">Nieuwe gebruiker toevoegen</h3>
+        <form method="POST" action="{{ url_for('add_user') }}">
+            <div>
+                <input type="text" name="username" placeholder="Username" required>
+            </div>
+            <div>
+                <input type="password" name="password" placeholder="Password" required>
+            </div>
+            <div>
+                <select name="role">
+                    <option value="parent">Parent</option>
+                    <option value="child">Child</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+
+            {% if role == 'admin' %}
+            <div>
+                <input type="number" name="family_id" placeholder="Family ID (alleen admin)">
+            </div>
+            {% endif %}
+
+            <button type="submit">Toevoegen</button>
+        </form>
+    </main>
+
+    <footer>
+        PancakeScience – Gebruikersbeheer
+    </footer>
+</body>
+
+</html>
