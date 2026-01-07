@@ -35,10 +35,12 @@
                     <td>{{ u.role }}</td>
                     <td>{{ u.Family_id }}</td>
                     <td>
+                        {% if u.role != 'admin' and u.user_id != session.user_id %}
                         <a href="{{ url_for('delete_user', user_id=u.user_id) }}"
                             onclick="return confirm('Weet je zeker dat je deze gebruiker wilt verwijderen?');">
                             Verwijderen
                         </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

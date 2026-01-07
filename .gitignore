@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 venv/
 templates/__pycache__/
+hashing.py
