@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Live temperatuur - PancakeScience</title>
+    <title>Temperatuurgrafiek - PancakeScience</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -10,23 +10,24 @@
     <header>
         <h1>PancakeScience</h1>
         <div class="user-info">
-            Ingelogd als: <strong>{{ role }}</strong>
+            Ingelogd als: <strong>{{ role if role else '' }}</strong>
             <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
         </div>
     </header>
 
     <main>
-        <h2>Live temperatuur grafiek</h2>
+        <h2>Temperatuurgrafiek</h2>
         <p><a href="{{ url_for('index') }}">← Terug naar dashboard</a></p>
 
-        <div class="text-center">
-            <img src="{{ url_for('graph_png') }}" alt="Live grafiek"
-                style="max-width:100%;border:1px solid #ddd;border-radius:4px;">
+        <div class="card">
+            <h3>Live temperatuur</h3>
+            <p>De grafiek wordt getoond zodra de Arduino data begint te sturen.</p>
+            <!-- Later kan hier een <img> of canvas voor de echte grafiek komen -->
         </div>
     </main>
 
     <footer>
-        PancakeScience – Sensor monitoring
+        PancakeScience – Grafiek
     </footer>
 </body>
 

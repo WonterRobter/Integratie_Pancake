@@ -6,18 +6,31 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
-<body class="login-page">
-    <div class="login-box">
-        <h2>PancakeScience Login</h2>
-        {% if error %}
-        <p class="error">{{ error }}</p>
-        {% endif %}
-        <form method="POST">
-            <input type="text" name="username" placeholder="Username" required><br>
-            <input type="password" name="password" placeholder="Password" required><br>
-            <button type="submit">Inloggen</button>
-        </form>
-    </div>
+<body>
+    <main style="max-width: 400px; margin-top: 10vh;">
+        <div class="card">
+            <h2>🍳 PancakeScience</h2>
+            <p style="text-align: center; color: #666; margin-bottom: 2rem;">Pannenkoekenbakken 2.0</p>
+
+            {% if error %}
+            <p class="error">{{ error }}</p>
+            {% endif %}
+
+            <form method="POST">
+                <div>
+                    <input type="text" name="username" placeholder="Gebruikersnaam" required>
+                </div>
+                <div>
+                    <input type="password" name="password" placeholder="Wachtwoord" required>
+                </div>
+                <button type="submit">Inloggen</button>
+            </form>
+
+            <p style="text-align: center; margin-top: 2rem; color: #666;">
+                Nieuwe gebruiker? Vraag een admin/parent.
+            </p>
+        </div>
+    </main>
 </body>
 
 </html>

@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>PancakeScience Dashboard</title>
+    <title>Dashboard - PancakeScience</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -10,40 +10,70 @@
     <header>
         <h1>PancakeScience</h1>
         <div class="user-info">
-            Ingelogd als: <strong>{{ role }}</strong>
+            Ingelogd als: <strong>{{ role }}</strong> |
+            <a href="{{ url_for('change_own_password') }}">Wachtwoord wijzigen</a> |
             <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
         </div>
     </header>
 
     <main>
         <h2>Dashboard</h2>
-        <p>Beheer je pannenkoeken-programma's, gebruikers en bekijk de live temperatuur van de bakplaat.</p>
 
-        <div class="cards">
+        <div class="card-grid">
             <div class="card">
-                <h3>Programma's <span class="tag">verwarming</span></h3>
-                <p>Bekijk en beheer de verwarmingsprogramma's (target temperatuur, flip tijd en totale tijd).</p>
-                <a href="{{ url_for('dashboard') }}">Naar programma's</a>
+                <h3>Programma's</h3>
+                <p>Beheer pannenkoekenbakprogramma's.</p>
+                <a href="{{ url_for('programs') }}">Programma's</a>
             </div>
 
+            {% if role in ['admin', 'parent'] %}
             <div class="card">
-                <h3>Live grafiek <span class="tag">sensor</span></h3>
-                <p>Bekijk de laatste temperatuurmetingen van de pannenkoekenbakplaat.</p>
-                <a class="secondary" href="{{ url_for('graph_page') }}">Bekijk grafiek</a>
-            </div>
-
-            {% if role == 'parent' or role == 'admin' %}
-            <div class="card">
-                <h3>Gebruikers <span class="tag">familie / systeem</span></h3>
-                <p>Beheer gebruikers. Admin ziet alle accounts, parent alleen de eigen familie.</p>
-                <a href="{{ url_for('users') }}">Naar gebruikers</a>
+                <h3>Gebruikers</h3>
+                <p>Voeg users toe of beheer rechten.</p>
+                <a href="{{ url_for('users') }}">Gebruikers</a>
             </div>
             {% endif %}
+
+            <div class="card">
+                <h3>Live Grafiek</h3>
+                <p>Volg temperatuur real-time.</p>
+                <a href="{{ url_for('graph') }}">Grafiek</a>
+            </div>
+
+            <div class="card">
+                <h3>Arduino Status</h3>
+                <p>Sensor data wordt automatisch gelogd.</p>
+                <p><strong>Laatste temp:</strong> {{ recent_sensors[0].temperature if recent_sensors else 'Geen data' }}°C</p>
+            </div>
+
+
+
+
+        <div class="card">
+            <h3>Recente Sensor Data</h3>
+            <div class="table-wrapper">
+                <table>
+                    <tr>
+                        <th>Tijd</th>
+                        <th>Temp (°C)</th>
+                        <th>Status</th>
+                        <th>Programma</th>
+                    </tr>
+                    {% for sensor in recent_sensors %}
+                    <tr>
+                        <td>{{ sensor.timestamp }}</td>
+                        <td>{{ "%.1f"|format(sensor.temperature) }}</td>
+                        <td>{{ sensor.action }}</td>
+                        <td>{{ sensor.program_name or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
         </div>
     </main>
 
     <footer>
-        PancakeScience – Arduino UNO R4 WiFi • Raspberry Pi • Flask • MySQL
+        PancakeScience – Pannenkoekenbakken 2.0 © 2026
     </footer>
 </body>
 

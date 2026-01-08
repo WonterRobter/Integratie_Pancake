@@ -1,26 +1,76 @@
-<link rel="stylesheet" href="/static/style.css">
+<!doctype html>
+<html>
 
-<div class="container">
-    <h2>Kookprogramma's</h2>
+<head>
+    <title>Kookprogramma's - PancakeScience</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
 
-    {% if role == "admin" %}
-    <form method="post">
-        <input name="name" placeholder="Gerecht">
-        <input name="temp" placeholder="Temperatuur °C">
-        <input name="flip" placeholder="Flip na (sec)">
-        <input name="time" placeholder="Totale tijd (sec)">
-        <button>Toevoegen</button>
-    </form>
-    {% endif %}
+<body>
+    <header>
+        <h1>PancakeScience</h1>
+        <div class="user-info">
+            Ingelogd als: <strong>{{ role }}</strong>
+            <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
+        </div>
+    </header>
 
-    {% for p in programs %}
-    <div class="card">
-        <b>{{ p.name }}</b> – {{ p.temp }}°C – flip {{ p.flip }}s
-        {% if role == "admin" %}
-        <a class="delete" href="/delete_program/{{ loop.index0 }}">✖</a>
-        {% endif %}
-    </div>
-    {% endfor %}
+    <main>
+        <h2>Kookprogramma's</h2>
+        <p><a href="{{ url_for('index') }}">← Terug naar dashboard</a></p>
 
-    <a href="/dashboard">Terug</a>
-</div>
+        <!-- Nieuw programma toevoegen -->
+        <form method="POST" action="{{ url_for('add_program') }}">
+            <div>
+                <input type="text" name="name" placeholder="Gerecht" required>
+            </div>
+            <div>
+                <input type="text" name="description" placeholder="Beschrijving (optioneel)">
+            </div>
+            <div>
+                <input type="number" name="target_temp" placeholder="Temperatuur °C" required>
+            </div>
+            <div>
+                <input type="number" name="flip_time" placeholder="Flip na (sec)" required>
+            </div>
+            <div>
+                <input type="number" name="total_time" placeholder="Totale tijd (sec)" required>
+            </div>
+            <button type="submit">Toevoegen</button>
+        </form>
+
+        <!-- Bestaande programma's -->
+        <div class="card-grid" style="margin-top: 2rem;">
+            {% for p in programs %}
+            <div class="card">
+                <h3>{{ p.name }}</h3>
+
+                {% if p.description %}
+                <p style="margin-bottom: 0.5rem; color:#555;">
+                    {{ p.description }}
+                </p>
+                {% endif %}
+
+                <p>
+                    {{ p.target_temp }} °C – flip na {{ p.flip_time }} s – totale tijd {{ p.total_time }} s
+                </p>
+
+                <form method="POST" action="{{ url_for('delete_program', program_id=p.program_id) }}"
+                    onsubmit="return confirm('Programma {{ p.name }} verwijderen?');">
+                    <button type="submit" style="background:#ff4757;margin-top:1rem;">
+                        Verwijderen
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <p>Geen programma's gevonden.</p>
+            {% endfor %}
+        </div>
+    </main>
+
+    <footer>
+        PancakeScience – Kookprogramma's
+    </footer>
+</body>
+
+</html>
