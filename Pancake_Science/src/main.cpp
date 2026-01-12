@@ -5,7 +5,7 @@
 
 // --- INSTELLINGEN ---
 Adafruit_MLX90632 mlx = Adafruit_MLX90632();
-DFRobot_RGBLCD1602 lcd(0x2D, 16, 2); // Scherm op adres 0x2D
+DFRobot_RGBLCD1602 lcd(0x2D, 16, 2);
 
 const int relayPin = 7;  // Warmtemat
 const int buttonPin = 6; // Knopje
@@ -16,14 +16,14 @@ void setup() {
 
   // 1. Initialiseer LCD
   lcd.init();
-  lcd.setRGB(0, 0, 255); // Start met Blauw (Standby)
+  lcd.setRGB(0, 0, 255); // Start met "Blauw" (Standby)
   lcd.print("Systeem Start...");
   delay(1000);
 
   // 2. Initialiseer Sensor
   if (!mlx.begin()) {
     Serial.println("Geen sensor gevonden!");
-    lcd.setRGB(255, 0, 0); // Rood bij fout
+    lcd.setRGB(255, 0, 0); // "Rood" bij fout
     lcd.setCursor(0, 0);
     lcd.print("Sensor Fout!");
     while (1);
