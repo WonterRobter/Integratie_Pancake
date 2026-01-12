@@ -1,87 +1,102 @@
 #include <Arduino.h>
+#include <Wire.h>
 #include "Adafruit_MLX90632.h"
+#include "DFRobot_RGBLCD1602.h"
 
+// --- INSTELLINGEN ---
 Adafruit_MLX90632 mlx = Adafruit_MLX90632();
+DFRobot_RGBLCD1602 lcd(0x2D, 16, 2);
 
-// ---------- Hardware ----------
-const int relayPin = 7;  // Relay aansturen warmtemat
-const int buttonPin = 6; // Start/Stop knop
+const int relayPin = 7;  // Warmtemat
+const int buttonPin = 6; // Knopje
+bool isAan = false;      // Houdt bij of we aan of uit staan
 
-bool sessionActive = false; // sessie status
-
-void setup()
-{
+void setup() {
   Serial.begin(115200);
-  while (!Serial)
-    delay(10);
 
-  // Sensor initialisatie
-  Serial.println(F("Adafruit MLX90632 test"));
-  if (!mlx.begin())
-  {
-    Serial.println(F("Failed to find MLX90632 chip"));
-    while (1)
-      delay(10);
+  // 1. Initialiseer LCD
+  lcd.init();
+  lcd.setRGB(0, 0, 255); // Start met "Blauw" (Standby)
+  lcd.print("Systeem Start...");
+  delay(1000);
+
+  // 2. Initialiseer Sensor
+  if (!mlx.begin()) {
+    Serial.println("Geen sensor gevonden!");
+    lcd.setRGB(255, 0, 0); // "Rood" bij fout
+    lcd.setCursor(0, 0);
+    lcd.print("Sensor Fout!");
+    while (1);
   }
-  Serial.println(F("MLX90632 Found!"));
 
-  mlx.reset();
-  mlx.setMode(MLX90632_MODE_CONTINUOUS);
-  mlx.setMeasurementSelect(MLX90632_MEAS_MEDICAL);
-  mlx.setRefreshRate(MLX90632_REFRESH_2HZ);
-  mlx.resetNewData();
+  mlx.setMode(MLX90632_MODE_CONTINUOUS); // Continue modus
 
-  // ---------- Pins ----------
+  // 3. Pinnen
   pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, LOW); // Relay uit bij start
+  pinMode(buttonPin, INPUT_PULLUP);
 
-  pinMode(buttonPin, INPUT_PULLUP); // knop met interne pullup
+  // Scherm klaarzetten voor start
+  lcd.clear();
+  lcd.setRGB(0, 0, 255); // Blauw
+  lcd.print("Druk op Start");
 }
 
-void loop()
-{
-  // ---------- Knop detectie ----------
-  static bool lastButtonState = HIGH;
-  bool buttonState = digitalRead(buttonPin);
-
-  if (buttonState == LOW && lastButtonState == HIGH)
-  {            // togglet bij druk
-    delay(50); // debounce
-    sessionActive = !sessionActive;
-    if (sessionActive)
-    {
-      Serial.println("=== Session gestart ===");
-      digitalWrite(relayPin, HIGH); // warmtemat aan
+void loop() {
+  // ==========================================
+  // 1. KNOP CONTROLEREN
+  // ==========================================
+  if (digitalRead(buttonPin) == LOW) {
+    isAan = !isAan; // Wissel status
+    
+    if (isAan) {
+      digitalWrite(relayPin, HIGH); // Relais AAN
+      Serial.println("--- GESTART ---");
+      lcd.clear(); // Scherm schoonmaken voor nieuwe tekst
+    } else {
+      digitalWrite(relayPin, LOW);  // Relais UIT
+      Serial.println("--- GESTOPT ---");
+      
+      // Zet scherm op "Pauze" stand (Blauw)
+      lcd.setRGB(0, 0, 255); 
+      lcd.clear();
+      lcd.print("Sessie Gestopt");
     }
-    else
-    {
-      Serial.println("=== Session gestopt ===");
-      digitalWrite(relayPin, LOW); // warmtemat uit
+    delay(500); // Anti-dubbelklik
+  }
+
+  // ==========================================
+  // 2. METEN & SCHERM UPDATEN (Alleen als AAN)
+  // ==========================================
+  if (isAan) {
+    double matTemp = mlx.getObjectTemperature();
+    // double omgevingTemp = mlx.getAmbientTemperature(); // Optioneel als je ruimte hebt
+
+    // --- KLEUR BEPALEN ---
+    if (matTemp >= 30.0) {
+      lcd.setRGB(255, 0, 0); // ROOD (Boven 30 graden)
+    } else {
+      lcd.setRGB(0, 255, 0); // GROEN (Onder 30 graden)
     }
+
+    // --- TEKST OP SCHERM ---
+    // Regel 1: Status
+    lcd.setCursor(0, 0);
+    if (matTemp >= 30.0) {
+      lcd.print("LET OP: WARM!   "); 
+    } else {
+      lcd.print("Verwarmen...    ");
+    }
+
+    // Regel 2: Temperatuur
+    lcd.setCursor(0, 1);
+    lcd.print("Mat: ");
+    lcd.print(matTemp, 1); // 1 decimaal (bijv 28.5)
+    lcd.print((char)223);  // Graden teken (°)
+    lcd.print("C    ");      // Extra spaties om oude tekst te wissen
+
+    // Log ook naar serial monitor
+    Serial.print("Mat: "); Serial.println(matTemp);
+
+    delay(200); // Rustige update snelheid
   }
-  lastButtonState = buttonState;
-
-  // ---------- Temperatuur uitlezen ----------
-  if (mlx.isNewData() && sessionActive)
-  { // alleen meten tijdens sessie
-    double ambientTemp = mlx.getAmbientTemperature();
-    double objectTemp = mlx.getObjectTemperature();
-
-    Serial.print("Ambient Temp: ");
-    Serial.print(ambientTemp, 2);
-    Serial.print(" °C, Object Temp: ");
-    Serial.print(objectTemp, 2);
-    Serial.println(" °C");
-
-    mlx.resetNewData();
-  }
-
-  // Voor step modes, trigger measurement
-  mlx90632_mode_t currentMode = mlx.getMode();
-  if (currentMode == MLX90632_MODE_STEP || currentMode == MLX90632_MODE_SLEEPING_STEP)
-  {
-    mlx.startSingleMeasurement();
-  }
-
-  delay(500);
 }
