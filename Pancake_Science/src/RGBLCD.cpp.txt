@@ -1,0 +1,200 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include "Adafruit_MLX90632.h"
+#include "DFRobot_RGBLCD1602.h"
+
+// --- PINNEN ---
+const int encPinA = 3;   
+const int encPinB = 5;   
+const int encBtn  = 6;
+const int relayPin = 7; 
+
+// --- OBJECTEN ---
+Adafruit_MLX90632 mlx = Adafruit_MLX90632();
+DFRobot_RGBLCD1602 lcd(0x2D, 16, 2); 
+
+// --- PROGRAMMA DATA ---
+struct Programma {
+  String naam;
+  int temp;
+};
+
+Programma menus[] = {
+  {"Handwarm", 30},
+  {"Slow Cook", 60},
+  {"Thee", 80},
+  {"Koken", 100},
+  {"Maximaal", 140},
+  {"Pasta", 100},
+  {"Soep", 90},
+  {"Smelten", 45},
+  {"Warmhouden", 50},
+  {"Boost", 120}
+};
+
+int menuCount = sizeof(menus) / sizeof(menus[0]);
+int menuIndex = 0; 
+
+// --- VARIABELEN ---
+int lastEncState;           
+bool isActive = false;  
+int targetTemp = 0;         
+
+// --- FUNCTIES ---
+void toonMenuOpLCD();
+void toonStatusOpLCD(double currentTemp);
+
+void setup() {
+  Serial.begin(115200);
+
+  // Pinnen
+  pinMode(encPinA, INPUT_PULLUP);
+  pinMode(encPinB, INPUT_PULLUP);
+  pinMode(encBtn, INPUT_PULLUP);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);
+
+  lastEncState = digitalRead(encPinA); 
+
+  // Sensor Start
+  if (!mlx.begin()) {
+    Serial.println("Sensor Fout");
+    // Omdat LCD nog niet gestart is, doen we dat hier in noodgeval
+    lcd.init();
+    lcd.setRGB(255, 0, 0);
+    lcd.print("Sensor ERROR");
+    while (1); 
+  }
+  mlx.setMode(MLX90632_MODE_CONTINUOUS);
+
+  // LCD Start
+  lcd.init();
+  lcd.setRGB(0, 0, 255); // Blauw (Standby kleur)
+  lcd.print("Systeem Start...");
+  delay(1000);
+  
+  toonMenuOpLCD(); // Direct menu tonen
+}
+
+void loop() {
+  // ==========================================
+  // 1. NAVIGATIE (Alleen als we niet verwarmen)
+  // ==========================================
+  if (!isActive) {
+    int currentEncState = digitalRead(encPinA);
+
+    if (currentEncState != lastEncState && currentEncState == LOW) {
+      // Draaiing gedetecteerd
+      if (digitalRead(encPinB) != currentEncState) {
+        menuIndex++; 
+      } else {
+        menuIndex--; 
+      }
+
+      // Rondgaan in het menu
+      if (menuIndex >= menuCount) menuIndex = 0;        
+      if (menuIndex < 0) menuIndex = menuCount - 1;     
+
+      // Update het schermpje
+      toonMenuOpLCD();
+    }
+    lastEncState = currentEncState;
+  }
+
+  // ==========================================
+  // 2. KNOP (START / STOP)
+  // ==========================================
+  if (digitalRead(encBtn) == LOW) {
+    delay(50); // Debounce
+    while(digitalRead(encBtn) == LOW); 
+    delay(50);
+
+    isActive = !isActive; 
+
+    if (isActive) {
+      // --- START ---
+      targetTemp = menus[menuIndex].temp;
+      Serial.println("Gestart: " + menus[menuIndex].naam);
+      lcd.clear();
+      lcd.print("Starten...");
+    } else {
+      // --- STOP ---
+      digitalWrite(relayPin, LOW);
+      Serial.println("Gestopt");
+      
+      // Terug naar menu weergave
+      lcd.setRGB(0, 0, 255); // Blauw
+      toonMenuOpLCD();
+    }
+  }
+
+  // ==========================================
+  // 3. REGELING (Alleen als actief)
+  // ==========================================
+  if (isActive) {
+    double temp = mlx.getObjectTemperature();
+
+    // Thermostaat
+    if (temp < targetTemp) {
+      digitalWrite(relayPin, HIGH);
+    } else {
+      digitalWrite(relayPin, LOW);
+    }
+
+    // LCD updates (Kleurtjes!)
+    toonStatusOpLCD(temp);
+
+    delay(200); // Rustige update
+  }
+}
+
+// ==========================================
+// HULPFUNCTIES
+// ==========================================
+
+void toonMenuOpLCD() {
+  lcd.clear();
+  lcd.setRGB(255, 255, 255); // Wit licht voor menu
+  
+  // Regel 1: Naam
+  lcd.setCursor(0, 0);
+  lcd.print(">"); // Pijltje om aan te geven dat je selecteert
+  lcd.print(menus[menuIndex].naam);
+  
+  // Regel 2: Temperatuur
+  lcd.setCursor(0, 1);
+  lcd.print(" Doel: ");
+  lcd.print(menus[menuIndex].temp);
+  lcd.print((char)223); // Graden teken
+  lcd.print("C");
+}
+
+void toonStatusOpLCD(double currentTemp) {
+  // Kleur bepalen
+  if (currentTemp > (targetTemp + 5)) {
+    lcd.setRGB(255, 0, 0); // ROOD (Te heet)
+  } else if (currentTemp < (targetTemp - 2)) {
+    lcd.setRGB(255, 100, 0); // ORANJE (Opwarmen)
+  } else {
+    lcd.setRGB(0, 255, 0); // GROEN (Goed)
+  }
+
+  // Tekst tonen
+  // Regel 1: Status
+  lcd.setCursor(0, 0);
+  if (currentTemp > (targetTemp + 5)) {
+     lcd.print("! TE HEET !     ");
+  } else if (currentTemp < (targetTemp - 2)) {
+     lcd.print("Opwarmen...     ");
+  } else {
+     lcd.print("Temp OK         ");
+  }
+
+  // Regel 2: Temp data
+  lcd.setCursor(0, 1);
+  lcd.print("Nu:");
+  lcd.print(currentTemp, 1);
+  lcd.print((char)223);
+  lcd.print(" / ");
+  lcd.print(targetTemp);
+}
