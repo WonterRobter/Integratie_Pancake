@@ -41,8 +41,8 @@ struct Programma {
 
 Programma menus[] = {
   {"Handwarm", 30},
-  {"Slow Cook", 20},
-  {"Thee Water", 80},
+  {"Slow Cook", 32},
+  {"Thee Water", 35},
   {"Koken", 100},
   {"Braden", 140},
   {"Pasta", 100},
@@ -53,6 +53,9 @@ Programma menus[] = {
   {"Sous Vide", 56},
   {"Koffie", 92}
 };
+
+unsigned long previousLcdMillis = 0;
+const long lcdInterval = 500;
 
 int menuCount = sizeof(menus) / sizeof(menus[0]);
 int menuIndex = 0; 
@@ -166,33 +169,37 @@ void loop() {
     if (temp < targetTemp) digitalWrite(relayPin, HIGH);
     else digitalWrite(relayPin, LOW);
 
-    // --- NIEUW: Update de kleur van het grote scherm indien nodig ---
     updateTFTColor(temp);
 
-    // --- LCD UPDATE (Live data) ---
-    if (temp > (targetTemp + 5)) {
-      lcd.setRGB(255, 0, 0); 
-      lcd.setCursor(0, 0);
-      lcd.print("!! TE HEET !!   ");
-    } else if (temp < (targetTemp - 2)) {
-      lcd.setRGB(255, 100, 0); 
-      lcd.setCursor(0, 0);
-      lcd.print("Opwarmen...     ");
-    } else {
-      lcd.setRGB(0, 255, 0); 
-      lcd.setCursor(0, 0);
-      lcd.print("Stabiel         ");
-    }
+    unsigned long currentMillis = millis();
     
-    // Temp op LCD (Regel 2)
-    lcd.setCursor(0, 1);
-    lcd.print("Nu:");
-    lcd.print(temp, 1);
-    lcd.print((char)223); 
-    lcd.print(" / ");
-    lcd.print(targetTemp);
+    if (currentMillis - previousLcdMillis >= lcdInterval) {
+      previousLcdMillis = currentMillis;
 
-    delay(200); 
+      if (temp > (targetTemp + 5)) {
+        lcd.setRGB(255, 0, 0); 
+        lcd.setCursor(0, 0);
+        lcd.print("!! TE HEET !!   "); // Spaties vullen oude tekst
+      } else if (temp < (targetTemp - 2)) {
+        lcd.setRGB(255, 100, 0); 
+        lcd.setCursor(0, 0);
+        lcd.print("Opwarmen...     ");
+      } else {
+        lcd.setRGB(0, 255, 0); 
+        lcd.setCursor(0, 0);
+        lcd.print("Stabiel         ");
+      }
+      
+      // Temp op LCD (Regel 2)
+      lcd.setCursor(0, 1);
+      lcd.print("Nu:");
+      lcd.print(temp, 1);
+      lcd.print((char)223); 
+      lcd.print(" / ");
+      lcd.print(targetTemp);
+      // Eventueel extra spaties printen om restanten te wissen
+      lcd.print(" "); 
+    }
   }
 }
 
