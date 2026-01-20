@@ -13,6 +13,9 @@
 #include "secrets.h" // SSID, PASSWORD, FLASK_HOST, FLASK_PORT
 #include "config.h"  // POST_INTERVAL_MS
 
+// ====== BRONNEN ======
+// Zie https://github.com/WonterRobter/Integratie_Pancake/ voor bronnenlijst
+
 // --- DESIGN KLEUREN ---
 #define C_BLACK 0x0000
 #define C_WHITE 0xFFFF
