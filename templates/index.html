@@ -32,7 +32,14 @@
                 <p>Voeg users toe of beheer rechten.</p>
                 <a href="{{ url_for('users') }}">Gebruikers</a>
             </div>
+
+            <div class="card">
+                <h3>Sensor Logs</h3>
+                <p>Bekijk alle gelogde metingen.</p>
+                <a href="{{ url_for('logs') }}">Open logs</a>
+            </div>
             {% endif %}
+
 
             <div class="card">
                 <h3>Live Grafiek</h3>
@@ -43,37 +50,38 @@
             <div class="card">
                 <h3>Arduino Status</h3>
                 <p>Sensor data wordt automatisch gelogd.</p>
-                <p><strong>Laatste temp:</strong> {{ recent_sensors[0].temperature if recent_sensors else 'Geen data' }}°C</p>
+                <p><strong>Laatste temp:</strong> {{ recent_sensors[0].temperature if recent_sensors else 'Geen data'
+                    }}°C</p>
             </div>
 
 
 
 
-        <div class="card">
-            <h3>Recente Sensor Data</h3>
-            <div class="table-wrapper">
-                <table>
-                    <tr>
-                        <th>Tijd</th>
-                        <th>Temp (°C)</th>
-                        <th>Status</th>
-                        <th>Programma</th>
-                    </tr>
-                    {% for sensor in recent_sensors %}
-                    <tr>
-                        <td>{{ sensor.timestamp }}</td>
-                        <td>{{ "%.1f"|format(sensor.temperature) }}</td>
-                        <td>{{ sensor.action }}</td>
-                        <td>{{ sensor.program_name or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
+            <div class="card">
+                <h3>Recente Sensor Data</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <tr>
+                            <th>Tijd</th>
+                            <th>Temp (°C)</th>
+                            <th>Status</th>
+                            <th>Programma</th>
+                        </tr>
+                        {% for sensor in recent_sensors %}
+                        <tr>
+                            <td>{{ sensor.timestamp }}</td>
+                            <td>{{ "%.1f"|format(sensor.temperature) }}</td>
+                            <td>{{ sensor.action }}</td>
+                            <td>{{ sensor.program_name or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
             </div>
-        </div>
     </main>
 
     <footer>
-        PancakeScience – Pannenkoekenbakken 2.0 © 2026
+        PancakeScience – Integratieproject Bollywood
     </footer>
 </body>
 
