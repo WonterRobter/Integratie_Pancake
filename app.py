@@ -1,7 +1,7 @@
 # ------------------ BRONNEN ------------------ #
 
 # ------------------ Libraries ------------------ #
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 import matplotlib
 matplotlib.use('Agg')
@@ -26,6 +26,7 @@ def get_db():
         password=os.getenv('DB_PASS'),
         database=os.getenv('DB_NAME')
     )
+
 # ------------------ AUTH FUNCTIES ------------------ #
 
 def login_required():
@@ -176,25 +177,13 @@ def index():
     db = get_db()
     cursor = db.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM users WHERE user_id=%s", (session['user_id'],))
-    current_user = cursor.fetchone()
-
-    if is_admin():
-        cursor.execute("SELECT * FROM programs ORDER BY name")
-    else:
-        cursor.execute("""
-            SELECT p.* FROM programs p 
-            JOIN users u ON p.user_id = u.user_id 
-            WHERE u.Family_id = %s OR u.user_id = %s
-            ORDER BY p.name
-        """, (session['family_id'], session['user_id']))
-    programs = cursor.fetchall()
-
     cursor.execute("""
-        SELECT sl.*, p.name as program_name 
-        FROM sensor_logs sl 
-        LEFT JOIN programs p ON sl.program_id = p.program_id 
-        ORDER BY sl.timestamp DESC LIMIT 10
+        SELECT sl.*, p.name AS program_name
+        FROM sensor_logs sl
+        LEFT JOIN programs p ON sl.program_id = p.program_id
+        WHERE sl.temperature IS NOT NULL
+        ORDER BY sl.timestamp DESC
+        LIMIT 3
     """)
     recent_sensors = cursor.fetchall()
 
@@ -202,11 +191,9 @@ def index():
     db.close()
 
     return render_template(
-        'index.html',
-        role=session['role'],
-        programs=programs,
-        recent_sensors=recent_sensors,
-        current_user=current_user
+        "index.html",
+        role=session.get("role"),
+        recent_sensors=recent_sensors
     )
 
 # ------------------ USERS ------------------ #
@@ -313,6 +300,40 @@ def programs():
     db.close()
 
     return render_template("programs.html", programs=programs, role=session['role'])
+    
+
+@app.route("/logs")
+def logs():
+    if not login_required():
+        return redirect(url_for('login'))
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT sl.log_id,
+               sl.timestamp,
+               sl.temperature,
+               sl.action,
+               sl.program_id,
+               s.session_id,
+               p.name AS program_name
+        FROM sensor_logs sl
+        LEFT JOIN sessions s ON sl.session_id = s.session_id
+        LEFT JOIN programs p ON sl.program_id = p.program_id
+        WHERE sl.temperature IS NOT NULL
+        ORDER BY sl.timestamp DESC
+        LIMIT 1000
+    """)
+    logs = cursor.fetchall()
+
+    cursor.close()
+    db.close()
+
+    return render_template("logs.html",
+                           role=session.get("role"),
+                           logs=logs)
+
 
 @app.route("/add_program", methods=['POST'])
 def add_program():
@@ -360,21 +381,71 @@ def delete_program(program_id):
 
 # ------------------ ARDUINO API ------------------ #
 
+@app.route("/api/start_session", methods=['POST'])
+def start_session():
+    data = request.get_json(force=True, silent=True) or {}
+    program_id = data.get('program_id')
+
+    print("start_session data:", data)
+
+    db = get_db()
+    cursor = db.cursor()
+    user_id = 1  # voorlopig vaste user (admin of demo-user)
+
+    try:
+        cursor.execute("""
+            INSERT INTO sessions (user_id, program_id, start_time)
+            VALUES (%s, %s, NOW())
+        """, (user_id, program_id))
+        session_id = cursor.lastrowid
+        db.commit()
+    except mysql.connector.Error as e:
+        print("DB error in start_session:", e)
+        db.rollback()
+        cursor.close()
+        db.close()
+        return jsonify({"error": "db_error", "message": str(e)}), 500
+
+    cursor.close()
+    db.close()
+
+    return jsonify({"session_id": session_id}), 200
+
+@app.route("/api/programs")
+def api_programs():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT program_id, name, target_temp, flip_time, total_time
+        FROM programs
+        ORDER BY program_id
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify(rows)
+
+
+
 @app.route("/api/sensor_data", methods=['POST'])
 def sensor_data():
-    data = request.json
+    data = request.get_json(force=True, silent=True) or {}
+    print("Arduino data:", data)
+
+    temperature = data.get('temperature')
+    if temperature is None:
+        return {"status": "ignored", "reason": "no_temperature"}, 200
 
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute("""
         INSERT INTO sensor_logs (session_id, timestamp, temperature, action, program_id)
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES (%s, NOW(), %s, %s, %s)
     """, (
         data.get('session_id'),
-        data.get('timestamp'),
-        data.get('temperature'),
-        data.get('status'),
+        temperature,
+        data.get('status'),     # 'preheat' | 'cook' | 'wait' | 'stop'
         data.get('program_id')
     ))
 
@@ -393,13 +464,87 @@ def get_control():
         "led_b": 0
     }
 
+# ------------------ csv export ------------------ #
+
+@app.route("/logs/csv")
+def logs_csv():
+    if not parent_or_admin_required():
+        return redirect(url_for('index'))
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT sl.log_id,
+               sl.timestamp,
+               sl.temperature,
+               sl.action,
+               sl.program_id,
+               s.session_id,
+               p.name AS program_name
+        FROM sensor_logs sl
+        LEFT JOIN sessions s ON sl.session_id = s.session_id
+        LEFT JOIN programs p ON sl.program_id = p.program_id
+        ORDER BY sl.timestamp DESC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    # CSV-string opbouwen
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    writer.writerow(["log_id", "timestamp", "temperature", "action",
+                     "program_id", "session_id", "program_name"])
+    for r in rows:
+        writer.writerow([
+            r["log_id"], r["timestamp"], r["temperature"], r["action"],
+            r["program_id"], r["session_id"], r["program_name"]
+        ])
+    csv_data = output.getvalue()
+    output.close()
+
+    from flask import Response
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=sensor_logs.csv"}
+    )
+
+
 # ------------------ GRAPH ------------------ #
 
 @app.route("/graph")
 def graph():
     if not login_required():
         return redirect(url_for('login'))
-    return render_template('graph.html', role=session.get('role'))
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT  t.timestamp,
+        t.temperature
+        FROM (
+        SELECT timestamp, temperature
+        FROM sensor_logs
+        WHERE program_id IS NOT NULL
+        AND temperature IS NOT NULL
+        ORDER BY timestamp DESC
+        LIMIT 50
+        ) AS t
+        ORDER BY t.timestamp ASC;
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    labels = [r['timestamp'].strftime("%H:%M:%S") for r in rows]
+    temps  = [float(r['temperature']) for r in rows]
+
+    return render_template('graph.html', role=session.get('role'),
+                           labels=labels, temps=temps)
 
 # ------------------ MAIN ------------------ #
 

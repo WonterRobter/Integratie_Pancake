@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Sensor Logs - PancakeScience</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .logs-table-wrapper {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        table.logs-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        table.logs-table th,
+        table.logs-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        table.logs-table th {
+            position: sticky;
+            top: 0;
+            background: #5b2cff;
+            color: #fff;
+            z-index: 1;
+        }
+
+        table.logs-table tr:nth-child(even) {
+            background: #f9f9ff;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>PancakeScience</h1>
+        <div class="user-info">
+            Ingelogd als: <strong>{{ role if role else '' }}</strong> |
+            <a href="{{ url_for('index') }}">Dashboard</a> |
+            <a class="logout-link" href="{{ url_for('logout') }}">Uitloggen</a>
+        </div>
+    </header>
+
+    <main>
+        <h2>Alle Sensor Logs</h2>
+        <p><a href="{{ url_for('index') }}">← Terug naar dashboard</a></p>
+        <p>
+            Laatste 1000 metingen, meest recent bovenaan.
+            <a class="btn" href="{{ url_for('logs_csv') }}">Export naar CSV</a>
+        </p>
+
+        <div class="logs-table-wrapper">
+            <table class="logs-table">
+                <thead>
+                    <tr>
+                        <th>Log ID</th>
+                        <th>Tijd</th>
+                        <th>Temp (°C)</th>
+                        <th>Status</th>
+                        <th>Programma</th>
+                        <th>Program ID</th>
+                        <th>Session ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in logs %}
+                    <tr>
+                        <td>{{ row.log_id }}</td>
+                        <td>{{ row.timestamp }}</td>
+                        <td>{{ row.temperature }}</td>
+                        <td>{{ row.action }}</td>
+                        <td>{{ row.program_name or '-' }}</td>
+                        <td>{{ row.program_id or '-' }}</td>
+                        <td>{{ row.session_id or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7">Geen logs beschikbaar.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer>
+        PancakeScience – Sensor Logs
+    </footer>
+</body>
+
+</html>
