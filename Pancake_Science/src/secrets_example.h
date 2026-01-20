@@ -1,3 +1,4 @@
 const char *SSID = "SSID";
 const char *PASSWORD = "Wachtwoord";
-const char *MQTT_SERVER = "PI IP";
+const char *FLASK_HOST = ""; // IP Raspberry Pi
+const int FLASK_PORT = 0;

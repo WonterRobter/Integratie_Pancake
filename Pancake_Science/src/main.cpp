@@ -48,26 +48,21 @@ struct Programma
 {
   String naam;
   int temp;
+  int dbId;      // program_id uit de DB
+  int flipTime;  // flip-tijd (s)
+  int totalTime; // totale tijd (s)
 };
 
-Programma menus[] = {
-    {"Handwarm", 30},
-    {"Slow Cook", 32},
-    {"Thee Water", 35},
-    {"Koken", 100},
-    {"Braden", 140},
-    {"Pasta", 100},
-    {"Soep", 90},
-    {"Chocolade", 45},
-    {"Warmhouden", 50},
-    {"Boost Mode", 120},
-    {"Sous Vide", 56},
-    {"Koffie", 92}};
+Programma menus[12];
+int menuCount = 0;
 
+// --- STATE VARIABELEN ---
 unsigned long previousLcdMillis = 0;
 const long lcdInterval = 500;
 
-int menuCount = sizeof(menus) / sizeof(menus[0]);
+unsigned long previousTftMillis = 0;
+const long tftInterval = 1000; // TFT max 1x/s updaten
+
 int menuIndex = 0;
 int lastEncState;
 bool isActive = false;
@@ -81,11 +76,49 @@ unsigned long lastPostMillis = 0;
 int currentSessionId = -1;
 int currentProgramId = 0;
 
-// --- FUNCTIES ---
+// FLIP-STATE (max 1 flip per sessie)
+bool flipTimerActive = false;
+unsigned long flipStartMillis = 0;
+int currentFlipTime = 0; // in seconden
+bool flipWaitingAck = false;
+bool flipAlreadyDone = false;
+
+// SECOND-FASE (na flip tot einde totale tijd)
+bool totalTimerActive = false;
+unsigned long totalStartMillis = 0;
+int currentTotalTime = 0;     // totale baktijd in seconden
+bool totalWaitingAck = false; // wachten op knop na einde totale tijd
+
+// extra flag om direct te tekenen na events (bv. knop)
+bool forceImmediateTftDraw = false;
+
+// --- FUNCTIEDECLARATIES ---
 void drawMenuPage();
 void updateMenuItem(int index, bool selected);
 void drawStaticInfoScreen();
 void updateTFTColor(double currentTemp);
+void drawTftFrame(double currentTemp, const char *statusForDb); // centrale TFT-tekening
+String readHttpResponse(WiFiClient &client);
+void connectWiFi();
+void loadProgramsFromServer();
+int startSessionOnServer(int programId);
+void postSensorData(double temp, const char *statusStr);
+
+// Simuleer hogere temperatuur 21–150 °C op basis van echte sensor 21–35 °C
+double getVirtualTemp(double rawTemp)
+{
+  const double room = 21.0;
+  const double maxRaw = 35.0;
+  const double maxVirt = 150.0;
+
+  if (rawTemp <= room)
+    return rawTemp;
+  if (rawTemp >= maxRaw)
+    return maxVirt;
+
+  double frac = (rawTemp - room) / (maxRaw - room); // 0..1
+  return room + frac * (maxVirt - room);
+}
 
 // ========= NETWERKFUNCTIES =========
 
@@ -128,6 +161,65 @@ String readHttpResponse(WiFiClient &client)
     }
   }
   return response;
+}
+
+void loadProgramsFromServer()
+{
+  if (WiFi.status() != WL_CONNECTED)
+    connectWiFi();
+  if (WiFi.status() != WL_CONNECTED)
+    return;
+
+  if (!wifiClient.connect(FLASK_HOST, FLASK_PORT))
+    return;
+
+  wifiClient.println("GET /api/programs HTTP/1.1");
+  wifiClient.print("Host: ");
+  wifiClient.println(FLASK_HOST);
+  wifiClient.println("Connection: close");
+  wifiClient.println();
+
+  String resp = readHttpResponse(wifiClient);
+  wifiClient.stop();
+
+  int bodyIndex = resp.indexOf("\r\n\r\n");
+  String body = (bodyIndex >= 0) ? resp.substring(bodyIndex + 4) : resp;
+  body.trim();
+
+  StaticJsonDocument<2048> doc;
+  DeserializationError err = deserializeJson(doc, body);
+  if (err)
+  {
+    Serial.println("JSON parse error /api/programs");
+    return;
+  }
+
+  menuCount = 0;
+  for (JsonObject p : doc.as<JsonArray>())
+  {
+    if (menuCount >= 12)
+      break;
+    menus[menuCount].naam = (const char *)p["name"];
+    menus[menuCount].temp = (int)p["target_temp"];
+    menus[menuCount].dbId = (int)p["program_id"];
+    menus[menuCount].flipTime = (int)p["flip_time"];
+    menus[menuCount].totalTime = (int)p["total_time"];
+    menuCount++;
+  }
+
+  Serial.print("Programma's geladen: ");
+  Serial.println(menuCount);
+
+  // extra menu-item voor refresh onderaan
+  if (menuCount < 12)
+  {
+    menus[menuCount].naam = "REFRESH PROGRAMMA'S";
+    menus[menuCount].temp = 0;
+    menus[menuCount].dbId = -1; // speciale ID
+    menus[menuCount].flipTime = 0;
+    menus[menuCount].totalTime = 0;
+    menuCount++;
+  }
 }
 
 int startSessionOnServer(int programId)
@@ -233,11 +325,11 @@ void postSensorData(double temp, const char *statusStr)
   }
 
   StaticJsonDocument<256> doc;
-  doc["temperature"] = temp;
+  doc["temperature"] = temp; // hier log je de echte sensorwaarde (raw)
   doc["program_id"] = currentProgramId;
   doc["session_id"] = currentSessionId;
   doc["status"] = statusStr;
-  doc["timestamp"] = millis(); // server gebruikt zelf NOW()
+  doc["timestamp"] = millis();
 
   String body;
   serializeJson(doc, body);
@@ -275,7 +367,6 @@ void setup()
 {
   Serial.begin(115200);
 
-  // Hardware Setup
   pinMode(encPinA, INPUT_PULLUP);
   pinMode(encPinB, INPUT_PULLUP);
   pinMode(encBtn, INPUT_PULLUP);
@@ -283,7 +374,6 @@ void setup()
   digitalWrite(relayPin, LOW);
   lastEncState = digitalRead(encPinA);
 
-  // LCD & Sensor Init
   lcd.init();
   lcd.setRGB(0, 0, 255);
   if (!mlx.begin())
@@ -295,14 +385,12 @@ void setup()
   }
   mlx.setMode(MLX90632_MODE_CONTINUOUS);
 
-  // TFT Init
   tft.init(170, 320);
   tft.setRotation(3);
   tft.fillScreen(C_BG);
 
-  // WiFi
   connectWiFi();
-
+  loadProgramsFromServer();
   drawMenuPage();
 }
 
@@ -310,7 +398,73 @@ void setup()
 
 void loop()
 {
-  // 1. NAVIGATIE
+  // 1. FLIP-BEVESTIGING
+  if (flipWaitingAck && digitalRead(encBtn) == LOW)
+  {
+    delay(50);
+    while (digitalRead(encBtn) == LOW)
+      ;
+    delay(50);
+
+    flipWaitingAck = false;
+    flipTimerActive = false;
+    flipAlreadyDone = true;
+
+    // nu start de tweede fase (totale tijd - flip)
+    if (currentTotalTime > currentFlipTime)
+    {
+      totalTimerActive = true;
+      totalStartMillis = millis();
+      totalWaitingAck = false;
+    }
+
+    tft.fillRect(20, 65, 280, 80, C_BLACK); // nu middenvak leegmaken
+    tft.fillRect(0, 200, 320, 40, C_BG);    // onderbalk leeg
+    lcd.setRGB(0, 255, 0);
+    lcd.setCursor(0, 0);
+    lcd.print("Na flip, bak... ");
+    forceImmediateTftDraw = true; // nu meteen scherm updaten
+
+    double raw = mlx.getObjectTemperature();
+    if (!isnan(raw))
+    {
+      postSensorData(raw, "flip");
+    }
+
+    return;
+  }
+
+  // 2. EINDE TOTALE TIJD - WACHTEN OP KNOP
+  if (totalWaitingAck && digitalRead(encBtn) == LOW)
+  {
+    delay(50);
+    while (digitalRead(encBtn) == LOW)
+      ;
+    delay(50);
+
+    double raw = mlx.getObjectTemperature();
+    if (!isnan(raw))
+    {
+      postSensorData(raw, "stop");
+    }
+
+    isActive = false;
+    currentSessionId = -1;
+    totalWaitingAck = false;
+    totalTimerActive = false;
+
+    digitalWrite(relayPin, LOW);
+    lcd.setRGB(0, 0, 255);
+    lcd.clear();
+    lcd.print("Klaar!");
+
+    tft.fillScreen(C_BG);
+    drawMenuPage();
+
+    return;
+  }
+
+  // 3. NAVIGATIE
   if (!isActive)
   {
     int currentEncState = digitalRead(encPinA);
@@ -334,7 +488,7 @@ void loop()
 
       if (newPage != oldPage)
       {
-        drawMenuPage();
+        drawMenuPage(); // nu volledige menupagina opnieuw tekenen
       }
       else
       {
@@ -345,8 +499,8 @@ void loop()
     lastEncState = currentEncState;
   }
 
-  // 2. KNOP START/STOP
-  if (digitalRead(encBtn) == LOW)
+  // 4. START/STOP (enkel als we niet in een wacht-ack zitten)
+  if (!flipWaitingAck && !totalWaitingAck && digitalRead(encBtn) == LOW)
   {
     delay(50);
     while (digitalRead(encBtn) == LOW)
@@ -357,11 +511,21 @@ void loop()
 
     if (isActive)
     {
-      // START
+      // speciale case: REFRESH PROGRAMMA'S
+      if (menus[menuIndex].dbId == -1)
+      {
+        isActive = false;
+        loadProgramsFromServer(); // nu programma's opnieuw ophalen
+        drawMenuPage();
+        return;
+      }
+
       targetTemp = menus[menuIndex].temp;
-      currentProgramId = menuIndex + 1; // eenvoudige mapping
+      currentProgramId = menus[menuIndex].dbId;
+      currentFlipTime = menus[menuIndex].flipTime;
+      currentTotalTime = menus[menuIndex].totalTime;
       lastTFTColor = C_SELECT;
-      drawStaticInfoScreen();
+      drawStaticInfoScreen(); // nu info-scherm tekenen
 
       currentSessionId = startSessionOnServer(currentProgramId);
       if (currentSessionId <= 0)
@@ -377,68 +541,85 @@ void loop()
         return;
       }
 
-      double temp = mlx.getObjectTemperature();
-      if (!isnan(temp))
+      double raw = mlx.getObjectTemperature();
+      if (!isnan(raw))
       {
-        postSensorData(temp, "preheat");
+        postSensorData(raw, "preheat");
       }
+
+      flipAlreadyDone = false;
+      flipTimerActive = false;
+      flipWaitingAck = false;
+      totalTimerActive = false;
+      totalWaitingAck = false;
+      forceImmediateTftDraw = true; // na start direct TFT updaten
     }
     else
     {
-      // STOP
-      double temp = mlx.getObjectTemperature();
+      double raw = mlx.getObjectTemperature();
       digitalWrite(relayPin, LOW);
       lcd.setRGB(0, 0, 255);
       lcd.clear();
       lcd.print("Gestopt");
 
-      if (!isnan(temp))
+      if (!isnan(raw))
       {
-        postSensorData(temp, "stop");
+        postSensorData(raw, "stop");
       }
       currentSessionId = -1;
 
       tft.fillScreen(C_BG);
       drawMenuPage();
+
+      flipTimerActive = false;
+      flipWaitingAck = false;
+      flipAlreadyDone = false;
+      totalTimerActive = false;
+      totalWaitingAck = false;
     }
   }
 
-  // 3. PROCES (verwarmen)
+  // 5. PROCES
   if (isActive)
   {
-    double temp = mlx.getObjectTemperature();
-    if (isnan(temp))
+    double raw = mlx.getObjectTemperature();
+    if (isnan(raw))
     {
       Serial.println("MLX gaf NaN, skip cycle");
       return;
     }
 
-    // Relais sturing
+    // virtuele temperatuur berekenen op basis van echte sensor
+    double temp = getVirtualTemp(raw);
+
+    // nu verwarmen: relais aan/uit op basis van targetTemp
     if (temp < targetTemp)
       digitalWrite(relayPin, HIGH);
     else
       digitalWrite(relayPin, LOW);
 
-    updateTFTColor(temp);
-
     unsigned long currentMillis = millis();
+
+    // ====== STATUS + TIMERS ======
+    const double tooHot = targetTemp + 10;
+    const double tooCold = targetTemp - 10;
+    const char *statusForDb;
 
     // LCD‑update
     if (currentMillis - previousLcdMillis >= lcdInterval)
     {
       previousLcdMillis = currentMillis;
 
-      // regel 0 volledig wissen
       lcd.setCursor(0, 0);
       lcd.print("                ");
 
-      if (temp > (targetTemp + 5))
+      if (temp > tooHot)
       {
         lcd.setRGB(255, 0, 0);
         lcd.setCursor(0, 0);
         lcd.print("!! TE HEET !!   ");
       }
-      else if (temp < (targetTemp - 2))
+      else if (temp < tooCold)
       {
         lcd.setRGB(255, 100, 0);
         lcd.setCursor(0, 0);
@@ -451,7 +632,6 @@ void loop()
         lcd.print("Stabiel         ");
       }
 
-      // regel 1 volledig wissen
       lcd.setCursor(0, 1);
       lcd.print("                ");
 
@@ -463,23 +643,42 @@ void loop()
       lcd.print(targetTemp);
     }
 
-    // ====== STATUS VOOR DB OP BASIS VAN TEMP ======
-    const double tooHot = targetTemp + 5;
-    const double tooCold = targetTemp - 2;
-    const char *statusForDb;
+    
 
     if (temp > tooHot)
+    {
       statusForDb = "wait";
+    }
     else if (temp < tooCold)
+    {
       statusForDb = "preheat";
+    }
     else
+    {
       statusForDb = "cook";
 
-    // PERIODIEKE POST NAAR FLASK
+      // flip-timer pas starten als stabiel
+      if (!flipAlreadyDone && !flipTimerActive && currentFlipTime > 0)
+      {
+        flipTimerActive = true;
+        flipStartMillis = millis();
+        flipWaitingAck = false;
+      }
+    }
+
+    // PERIODIEKE LOG NAAR SERVER (met echte sensorwaarde raw)
     if (currentMillis - lastPostMillis >= POST_INTERVAL_MS)
     {
       lastPostMillis = currentMillis;
-      postSensorData(temp, statusForDb);
+      postSensorData(raw, statusForDb);
+    }
+
+    // ====== TFT TEKENEN MAX 1X PER SECONDE ======
+    if ((currentMillis - previousTftMillis >= tftInterval) || forceImmediateTftDraw)
+    {
+      previousTftMillis = currentMillis;
+      forceImmediateTftDraw = false;
+      drawTftFrame(temp, statusForDb); // nu in één functie alles op TFT tekenen
     }
   }
 }
@@ -568,6 +767,7 @@ void drawStaticInfoScreen()
   tft.print("-> Zie kleine scherm voor live status");
 }
 
+// Temperatuur alleen tonen als geen timers actief zijn
 void updateTFTColor(double currentTemp)
 {
   uint16_t newColor;
@@ -587,6 +787,11 @@ void updateTFTColor(double currentTemp)
 
   static double lastTempDrawn = -1000;
 
+  if (flipTimerActive || flipWaitingAck || totalTimerActive || totalWaitingAck)
+  {
+    return;
+  }
+
   if (newColor != lastTFTColor || fabs(currentTemp - lastTempDrawn) >= 0.1)
   {
     tft.fillRect(115, 95, 120, 40, C_BLACK);
@@ -597,5 +802,111 @@ void updateTFTColor(double currentTemp)
     tft.print("C");
     lastTFTColor = newColor;
     lastTempDrawn = currentTemp;
+  }
+}
+
+// centrale functie: nu op scherm printen wat hoort bij de huidige state
+void drawTftFrame(double currentTemp, const char *statusForDb)
+{
+  // eerst: temperatuurweergave als er geen timers actief zijn
+  if (!flipTimerActive && !flipWaitingAck && !totalTimerActive && !totalWaitingAck)
+  {
+    updateTFTColor(currentTemp);
+    return;
+  }
+
+  // FLIP-TIMER
+  if (flipTimerActive && !flipAlreadyDone)
+  {
+    unsigned long elapsed = (millis() - flipStartMillis) / 1000;
+    long remaining = currentFlipTime - (long)elapsed;
+
+    if (remaining <= 0 && !flipWaitingAck)
+    {
+      // flip signaal
+      flipWaitingAck = true;
+
+      tft.fillRect(20, 65, 280, 80, C_BLACK);
+
+      tft.setCursor(35, 80);
+      tft.setTextColor(C_RED);
+      tft.setTextSize(2);
+      tft.print("Flip nu en druk");
+      tft.setCursor(60, 105);
+      tft.print("op de knop");
+
+      tft.fillRect(0, 200, 320, 40, C_BG);
+    }
+    else if (remaining > 0)
+    {
+      // countdown naar flip
+      tft.fillRect(20, 65, 280, 80, C_BLACK);
+
+      tft.setCursor(40, 80);
+      tft.setTextColor(C_WHITE);
+      tft.setTextSize(2);
+      tft.print("Flip over:");
+
+      tft.setCursor(70, 105);
+      tft.setTextColor(C_SELECT);
+      tft.setTextSize(3);
+      tft.print(remaining);
+      tft.print("s/");
+      tft.print(currentFlipTime);
+      tft.print("s");
+    }
+    return;
+  }
+
+  // FLIP-MELDING (wacht op knop)
+  if (flipWaitingAck)
+  {
+    // melding blijft staan, niks nieuws tekenen
+    return;
+  }
+
+  // TOTALE TIJD (na flip)
+  if (totalTimerActive && flipAlreadyDone && !totalWaitingAck)
+  {
+    unsigned long elapsedTotal = (millis() - totalStartMillis) / 1000;
+    long remainingTotal = (currentTotalTime - currentFlipTime) - (long)elapsedTotal;
+
+    if (remainingTotal <= 0)
+    {
+      totalWaitingAck = true;
+
+      tft.fillRect(20, 65, 280, 80, C_BLACK);
+      tft.setCursor(40, 80);
+      tft.setTextColor(C_GREEN);
+      tft.setTextSize(2);
+      tft.print("Klaar, druk op");
+      tft.setCursor(80, 105);
+      tft.print("de knop");
+    }
+    else
+    {
+      tft.fillRect(20, 65, 280, 80, C_BLACK);
+
+      tft.setCursor(40, 80);
+      tft.setTextColor(C_WHITE);
+      tft.setTextSize(2);
+      tft.print("Nog bakken:");
+
+      tft.setCursor(70, 105);
+      tft.setTextColor(C_GREEN);
+      tft.setTextSize(3);
+      tft.print(remainingTotal);
+      tft.print("s/");
+      tft.print(currentTotalTime - currentFlipTime);
+      tft.print("s");
+    }
+    return;
+  }
+
+  // TOTALE-TIJD-MELDING (wacht op knop)
+  if (totalWaitingAck)
+  {
+    // melding blijft staan, niks nieuws tekenen
+    return;
   }
 }
