@@ -1,5 +1,5 @@
 # ------------------ BRONNEN ------------------ #
-Zie https://github.com/WonterRobter/Integratie_Pancake/ voor bronnenlijst
+# Zie https://github.com/WonterRobter/Integratie_Pancake/ voor bronnenlijst
 # ------------------ Libraries ------------------ #
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
