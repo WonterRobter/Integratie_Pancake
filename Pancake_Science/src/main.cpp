@@ -505,10 +505,10 @@ void loop()
   // 4. START/STOP (enkel als we niet in een wacht-ack zitten)
   if (!flipWaitingAck && !totalWaitingAck && digitalRead(encBtn) == LOW)
   {
-    delay(50);
+    delay(50); //Programma even tijd geven om te laden
     while (digitalRead(encBtn) == LOW)
       ;
-    delay(50);
+    delay(50); //Programma handelen dat er op de button kan gedruk worden en dat dit niet stoppen is
 
     isActive = !isActive;
 
