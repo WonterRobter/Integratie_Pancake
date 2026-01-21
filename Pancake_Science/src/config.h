@@ -1,9 +1,9 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
 // simpele default ids voor demo
 const int SESSION_ID_DEFAULT = 1;
+// Interval tussen POSTs naar de server (milliseconden)
+#define POST_INTERVAL_MS 2000
 
-// optioneel extern instelbaar
-<<<<<<< HEAD
-const unsigned long POST_INTERVAL_MS = 5000;
-=======
-const unsigned long POST_INTERVAL_MS = 2000;
->>>>>>> fedc6d8d54a7b2ac06c286585dfe3a6f6f81cd85
+#endif
