@@ -431,7 +431,8 @@ void loop()
     double raw = mlx.getObjectTemperature();
     if (!isnan(raw))
     {
-      postSensorData(raw, "flip");
+      double temp = getVirtualTemp(raw);
+      postSensorData(temp, "flip");
     }
 
     return;
@@ -448,7 +449,8 @@ void loop()
     double raw = mlx.getObjectTemperature();
     if (!isnan(raw))
     {
-      postSensorData(raw, "stop");
+      double temp = getVirtualTemp(raw);
+      postSensorData(temp, "stop");
     }
 
     isActive = false;
@@ -547,7 +549,8 @@ void loop()
       double raw = mlx.getObjectTemperature();
       if (!isnan(raw))
       {
-        postSensorData(raw, "preheat");
+        double temp = getVirtualTemp(raw);
+        postSensorData(temp, "preheat");
       }
 
       flipAlreadyDone = false;
@@ -567,7 +570,8 @@ void loop()
 
       if (!isnan(raw))
       {
-        postSensorData(raw, "stop");
+        double temp = getVirtualTemp(raw);
+        postSensorData(temp, "stop");
       }
       currentSessionId = -1;
 
@@ -669,12 +673,13 @@ void loop()
       }
     }
 
-    // PERIODIEKE LOG NAAR SERVER (met echte sensorwaarde raw)
+    // PERIODIEKE LOG NAAR SERVER (met VIRTUELE temperatuur)
     if (currentMillis - lastPostMillis >= POST_INTERVAL_MS)
     {
-      lastPostMillis = currentMillis;
-      postSensorData(raw, statusForDb);
+    lastPostMillis = currentMillis;
+    postSensorData(temp, statusForDb);  // temp = getVirtualTemp(raw)
     }
+
 
     // ====== TFT TEKENEN MAX 1X PER SECONDE ======
     if ((currentMillis - previousTftMillis >= tftInterval) || forceImmediateTftDraw)
